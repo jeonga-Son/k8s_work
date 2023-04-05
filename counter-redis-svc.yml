@@ -1,0 +1,38 @@
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata: 
+  name: redis
+spec:
+  selector:
+    # 찾고싶은 라벨 => 라벨에 해당하는 pod을 deploy하겠다는 것
+    matchLabels:
+      app: counter
+      tier: db
+  template:
+    metadata:
+      labels:
+        app: counter
+        tier: db
+    spec:
+      containers:
+        - name: redis
+          image: redis
+          ports:
+            - containerPort: 6379
+              protocol: TCP
+
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata: 
+  name: redis
+spec: 
+  ports:
+    - port: 6379
+      protocol: TCP
+  # app이 Counter이고 tier가 db인 것을 찾는다.
+  selector:
+    app: counter
+    tier: db
