@@ -1,0 +1,204 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vote
+spec:
+  selector:
+    matchLabels:
+      service: vote
+  template:
+    metadata:
+      labels:
+        service: vote
+    spec:
+      containers:
+        - name: vote
+          # 파이썬으로 만들어진 vote application
+          image: ghcr.io/subicura/voting/vote
+          # redis server로 접근하기 위한 환경변수 정보
+          env:
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+          # livenessProbe : 문제 발생 시 새로운 pod을 생성하는 역할
+          # readinessProbe : 문제 발생 시 접근하지 못하도록 하는 역할
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+          ports:
+            # containerPort 80번으로 요청
+            - containerPort: 80
+              protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vote
+spec:
+  # NodePort : 외부에서 접근에서 pod에 접근하도록 함.
+  # 31000으로 연결하면 80 포트로 연결되도록 함.
+  type: NodePort
+  ports:
+    - port: 80
+      nodePort: 31000
+      protocol: TCP
+  selector:
+    # key가 service이고 value값이 vote인 것을 찾겠다는 것.
+    # 즉, label값과 일치하는 pod과 연결이 된다.
+    service: vote
+
+---
+# 결과값을 뽑아주는 pod
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: result
+spec:
+  selector:
+    matchLabels:
+      service: result
+  template:
+    metadata:
+      labels:
+        service: result
+    spec:
+      containers:
+        - name: result
+          image: ghcr.io/subicura/voting/result
+          env:
+            - name: POSTGRES_HOST
+              value: "db"
+            - name: POSTGRES_PORT
+              value: "5432"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+          ports:
+            - containerPort: 80
+              protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: result
+spec:
+  type: NodePort
+  ports:
+    # 31001번으로 들어오면 80포트와 매핑됨.
+    - port: 80
+      nodePort: 31001
+      protocol: TCP
+  selector:
+    # key가 service이고 value가 result인 pod 찾음.
+    service: result
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+spec:
+  selector:
+    matchLabels:
+      service: worker
+  template:
+    metadata:
+      labels:
+        service: worker
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/subicura/voting/worker
+          env:
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: POSTGRES_HOST
+              value: "db"
+            - name: POSTGRES_PORT
+              value: "5432"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  selector:
+    matchLabels:
+      service: redis
+  template:
+    metadata:
+      labels:
+        service: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis
+          ports:
+            - containerPort: 6379
+              protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  ports:
+    - port: 6379
+      protocol: TCP
+  selector:
+    service: redis
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+spec:
+  selector:
+    matchLabels:
+      service: db
+  template:
+    metadata:
+      labels:
+        service: db
+    spec:
+      containers:
+        - name: db
+          image: postgres:9.4
+          env:
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_PASSWORD
+              value: "postgres"
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+spec:
+  ports:
+    - port: 5432
+      protocol: TCP
+  selector:
+    service: db
